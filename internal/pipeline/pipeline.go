@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -117,6 +116,9 @@ func (p *Pipeline) fetch(ctx context.Context, out chan<- record) error {
 	topic := p.route.Topic
 	consumed := metrics.EventsConsumed.WithLabelValues(topic)
 	blocked := metrics.BackpressureSeconds.WithLabelValues(topic)
+	buffered := metrics.BufferedRecords.WithLabelValues(topic)
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
 
 	for {
 		msg, err := p.reader.FetchMessage(ctx)
@@ -127,8 +129,6 @@ func (p *Pipeline) fetch(ctx context.Context, out chan<- record) error {
 			return fmt.Errorf("fetch %s: %w", topic, err)
 		}
 		consumed.Inc()
-		metrics.ConsumerLag.WithLabelValues(topic, strconv.Itoa(msg.Partition)).
-			Set(float64(max(msg.HighWaterMark-msg.Offset-1, 0)))
 
 		rec := record{msg: msg}
 		env, ts, err := event.Parse(msg.Value, time.Now())
@@ -152,17 +152,28 @@ func (p *Pipeline) fetch(ctx context.Context, out chan<- record) error {
 
 		select {
 		case out <- rec:
+			buffered.Set(float64(len(out)))
 			continue
 		default:
 		}
-		// Buffer full: block until the batcher catches up.
-		start := time.Now()
-		select {
-		case out <- rec:
-			blocked.Add(time.Since(start).Seconds())
-		case <-ctx.Done():
-			return nil // not committed; will be redelivered
+		// Buffer full: stop fetching until the batcher catches up. Blocked
+		// time is reported every second so the metric moves during a stall.
+		buffered.Set(float64(cap(out)))
+		last := time.Now()
+	wait:
+		for {
+			select {
+			case out <- rec:
+				break wait
+			case <-tick.C:
+				now := time.Now()
+				blocked.Add(now.Sub(last).Seconds())
+				last = now
+			case <-ctx.Done():
+				return nil // not committed; will be redelivered
+			}
 		}
+		blocked.Add(time.Since(last).Seconds())
 	}
 }
 
@@ -170,7 +181,6 @@ func (p *Pipeline) fetch(ctx context.Context, out chan<- record) error {
 // MaxSize or every FlushInterval. When the input channel closes (shutdown)
 // it flushes what is left and returns.
 func (p *Pipeline) runBatcher(ctx context.Context, in <-chan record) error {
-	buffered := metrics.BufferedRecords.WithLabelValues(p.route.Topic)
 	ticker := time.NewTicker(p.batch.FlushInterval)
 	defer ticker.Stop()
 
@@ -192,7 +202,6 @@ func (p *Pipeline) runBatcher(ctx context.Context, in <-chan record) error {
 				pending = pending[:0]
 			}
 		case <-ticker.C:
-			buffered.Set(float64(len(in)))
 			if err := p.flush(ctx, pending); err != nil {
 				return err
 			}

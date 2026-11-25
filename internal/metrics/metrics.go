@@ -59,10 +59,10 @@ var (
 		Help: "Failed Kafka offset commits.",
 	}, []string{"topic"})
 
-	// ConsumerLag is high-water mark minus next offset to consume.
+	// ConsumerLag is high-water mark minus the group's committed offset.
 	ConsumerLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: ns, Name: "consumer_lag",
-		Help: "Messages between the last fetched offset and the partition high-water mark.",
+		Help: "Messages between the consumer group's committed offset and the partition high-water mark.",
 	}, []string{"topic", "partition"})
 
 	// BufferedRecords is the current depth of the fetch -> batcher queue.

@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/shammykr/streaming-analytics-ingestor/internal/config"
+	"github.com/shammykr/streaming-analytics-ingestor/internal/lag"
 	"github.com/shammykr/streaming-analytics-ingestor/internal/pipeline"
 	"github.com/shammykr/streaming-analytics-ingestor/internal/retry"
 	"github.com/shammykr/streaming-analytics-ingestor/internal/sink"
@@ -68,6 +69,12 @@ func run(cfgPath string, log *slog.Logger) error {
 	// with uncommitted offsets intact and can be restarted.
 	pctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	topics := make([]string, len(cfg.Routes))
+	for i, r := range cfg.Routes {
+		topics[i] = r.Topic
+	}
+	go lag.NewMonitor(cfg.Kafka.Brokers, cfg.Kafka.ConsumerGroup, topics, 5*time.Second, log).Run(pctx)
 
 	var (
 		wg   sync.WaitGroup
