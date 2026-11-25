@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.51.0
 	github.com/prometheus/client_golang v1.25.0
+	github.com/segmentio/kafka-go v0.4.51
 	gopkg.in/yaml.v3 v3.0.1
 )
 
