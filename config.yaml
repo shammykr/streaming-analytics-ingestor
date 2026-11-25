@@ -1,0 +1,32 @@
+kafka:
+  brokers: ["localhost:9092"]
+  consumer_group: analytics-ingestor
+  min_bytes: 1
+  max_bytes: 10485760
+
+clickhouse:
+  addr: ["localhost:9000"]
+  database: analytics
+  username: default
+  password: ""
+
+# Per-topic routing: every topic gets its own consumer and batcher.
+routes:
+  - topic: page_views
+    table: page_view_events
+  - topic: orders
+    table: order_events
+
+batch:
+  max_size: 5000        # flush when this many records are buffered
+  flush_interval: 1s    # ...or when the oldest buffered record is this old
+  buffer_size: 20000    # bounded queue between Kafka fetch and the batcher
+
+retry:
+  max_attempts: 8
+  initial_backoff: 200ms
+  max_backoff: 15s
+  multiplier: 2.0
+
+metrics_addr: ":9100"
+shutdown_timeout: 30s
