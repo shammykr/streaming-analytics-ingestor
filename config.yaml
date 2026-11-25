@@ -19,7 +19,7 @@ routes:
 
 batch:
   max_size: 5000        # flush when this many records are buffered
-  flush_interval: 1s    # ...or when the oldest buffered record is this old
+  flush_interval: 1s    # ...or at least this often
   buffer_size: 20000    # bounded queue between Kafka fetch and the batcher
 
 retry:
