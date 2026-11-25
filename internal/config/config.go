@@ -77,9 +77,9 @@ func defaults() Config {
 			BufferSize:    20000,
 		},
 		Retry: RetryConfig{
-			MaxAttempts:    8,
+			MaxAttempts:    12,
 			InitialBackoff: 200 * time.Millisecond,
-			MaxBackoff:     15 * time.Second,
+			MaxBackoff:     30 * time.Second,
 			Multiplier:     2.0,
 		},
 		MetricsAddr:     ":9100",
